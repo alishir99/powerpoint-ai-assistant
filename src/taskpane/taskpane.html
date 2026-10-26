@@ -14,23 +14,40 @@
 </head>
 
 <body>
-    <header>
-        <h1>AI Slide Assistant</h1>
-    </header>
-
     <section id="sideload-msg">
         <p>Open this add-in inside PowerPoint to use it.</p>
     </section>
 
     <main id="app-body" style="display: none;">
         <div id="messages" aria-live="polite">
-            <div class="msg assistant">Hi! Tell me what your presentation is about, and I'll add the slides
-                to this deck. For example: "5 slides for the management team on how AI can save time in
-                sales".</div>
+            <section id="welcome">
+                <h1 class="gradient">Create or improve slides</h1>
+                <button class="suggestion" type="button"
+                    data-text="Create 5 slides for the management team on how AI can save time in sales">
+                    <span class="arrow">↪</span> Create a presentation from scratch
+                </button>
+                <button class="suggestion" type="button" data-text="Make this slide clearer and more concise">
+                    <span class="arrow">↪</span> Improve the current slide
+                </button>
+                <button class="suggestion" type="button" data-text="Translate all slides to English">
+                    <span class="arrow">↪</span> Translate the whole deck
+                </button>
+            </section>
         </div>
+
         <form id="composer">
-            <textarea id="prompt" rows="3" placeholder="Describe your slides… (Enter to send)"></textarea>
-            <button id="send" type="submit">Send</button>
+            <div class="box">
+                <textarea id="prompt" rows="1" placeholder="Ask the assistant"></textarea>
+                <div class="row">
+                    <button id="send" type="submit" aria-label="Send" disabled>
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                            <path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <p class="disclaimer">AI can make mistakes. Check the slides before you present.</p>
         </form>
     </main>
 </body>
