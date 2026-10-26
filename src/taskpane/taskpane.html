@@ -16,7 +16,6 @@
 <body>
     <header>
         <h1>AI Slide Assistant</h1>
-        <p class="subtitle">Describe your presentation. The slides appear in this deck.</p>
     </header>
 
     <section id="sideload-msg">
@@ -24,33 +23,15 @@
     </section>
 
     <main id="app-body" style="display: none;">
-        <label for="prompt">What should the presentation be about?</label>
-        <textarea id="prompt" rows="6"
-            placeholder="E.g. 5 slides for the management team on how AI can save time in sales"></textarea>
-
-        <label for="count">Number of content slides</label>
-        <select id="count">
-            <option>3</option>
-            <option>4</option>
-            <option selected>5</option>
-            <option>6</option>
-            <option>8</option>
-        </select>
-
-        <button id="generate">Generate slides</button>
-        <p id="status" role="status"></p>
-
-        <details id="settings">
-            <summary>Settings</summary>
-            <label for="base-url">API base URL</label>
-            <input id="base-url" type="text" />
-            <label for="model">Model</label>
-            <input id="model" type="text" />
-            <label for="api-key">API key</label>
-            <input id="api-key" type="password" autocomplete="off" />
-            <p class="hint">Stored only on this computer. Works with OpenRouter, OpenAI or Azure OpenAI.</p>
-            <button id="save-settings" class="secondary">Save settings</button>
-        </details>
+        <div id="messages" aria-live="polite">
+            <div class="msg assistant">Hi! Tell me what your presentation is about, and I'll add the slides
+                to this deck. For example: "5 slides for the management team on how AI can save time in
+                sales".</div>
+        </div>
+        <form id="composer">
+            <textarea id="prompt" rows="3" placeholder="Describe your slides… (Enter to send)"></textarea>
+            <button id="send" type="submit">Send</button>
+        </form>
     </main>
 </body>
 

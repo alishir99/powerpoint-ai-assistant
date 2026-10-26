@@ -1,11 +1,6 @@
-/* global document, Office, PowerPoint, localStorage, fetch */
+/* global document, Office, PowerPoint, fetch */
 
 import { parseOutline } from "./outline.js";
-
-const DEFAULTS = {
-  baseUrl: "https://openrouter.ai/api/v1",
-  model: "openai/gpt-4o-mini",
-};
 
 // Layout names in English and Swedish Office. If neither matches,
 // fall back to the position used by the default Office theme.
@@ -16,122 +11,86 @@ Office.onReady((info) => {
   if (info.host !== Office.HostType.PowerPoint) return;
   document.getElementById("sideload-msg").style.display = "none";
   document.getElementById("app-body").style.display = "flex";
-  document.getElementById("generate").onclick = generate;
-  document.getElementById("save-settings").onclick = saveSettings;
-  loadSettings();
+
+  const prompt = document.getElementById("prompt");
+  document.getElementById("composer").onsubmit = (event) => {
+    event.preventDefault();
+    send();
+  };
+  prompt.onkeydown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      send();
+    }
+  };
+  prompt.focus();
+  openWithThisDeck();
 });
 
-// ---------- settings (kept in this computer's PowerPoint only) ----------
-
-function readStore(key) {
+// Remember the assistant in this deck, so the chat opens by itself next time it's opened.
+function openWithThisDeck() {
   try {
-    return localStorage.getItem(key) || "";
+    Office.context.document.settings.set("Office.AutoShowTaskpaneWithDocument", true);
+    Office.context.document.settings.saveAsync();
   } catch {
-    return "";
+    // not supported here: the AI Slides button still works
   }
 }
 
-function writeStore(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // storage blocked: settings only last for this session
-  }
+// ---------- chat ----------
+
+function addMessage(text, kind) {
+  const messages = document.getElementById("messages");
+  const el = document.createElement("div");
+  el.className = `msg ${kind}`;
+  el.textContent = text;
+  messages.appendChild(el);
+  messages.scrollTop = messages.scrollHeight;
+  return el;
 }
 
-function loadSettings() {
-  document.getElementById("base-url").value = readStore("baseUrl") || DEFAULTS.baseUrl;
-  document.getElementById("model").value = readStore("model") || DEFAULTS.model;
-  document.getElementById("api-key").value = readStore("apiKey");
-  if (!readStore("apiKey")) document.getElementById("settings").open = true;
-}
+async function send() {
+  const input = document.getElementById("prompt");
+  const button = document.getElementById("send");
+  const text = input.value.trim();
+  if (!text || button.disabled) return;
 
-function saveSettings() {
-  writeStore("baseUrl", document.getElementById("base-url").value.trim());
-  writeStore("model", document.getElementById("model").value.trim());
-  writeStore("apiKey", document.getElementById("api-key").value.trim());
-  setStatus("Settings saved.");
-}
-
-function getSettings() {
-  return {
-    baseUrl: (document.getElementById("base-url").value.trim() || DEFAULTS.baseUrl).replace(/\/+$/, ""),
-    model: document.getElementById("model").value.trim() || DEFAULTS.model,
-    apiKey: document.getElementById("api-key").value.trim(),
-  };
-}
-
-function setStatus(message, isError = false) {
-  const el = document.getElementById("status");
-  el.textContent = message;
-  el.className = isError ? "error" : "";
-}
-
-// ---------- main flow ----------
-
-async function generate() {
-  const prompt = document.getElementById("prompt").value.trim();
-  const count = Number(document.getElementById("count").value);
-  const settings = getSettings();
-
-  if (!prompt) return setStatus("Write what the presentation should be about.", true);
-  if (!settings.apiKey) {
-    document.getElementById("settings").open = true;
-    return setStatus("Add your API key under Settings first.", true);
-  }
   if (!Office.context.requirements.isSetSupported("PowerPointApi", "1.4")) {
-    return setStatus("This PowerPoint version is too old for the add-in. Update Office and try again.", true);
+    addMessage("This PowerPoint version is too old for the add-in. Update Office and try again.", "assistant error");
+    return;
   }
 
-  const button = document.getElementById("generate");
+  addMessage(text, "user");
+  input.value = "";
   button.disabled = true;
+  const thinking = addMessage("Writing your slides…", "assistant thinking");
   try {
-    setStatus("Asking the AI for an outline…");
-    const outline = await askForOutline(prompt, count, settings);
-    setStatus(`Building ${outline.slides.length + 1} slides…`);
+    const outline = await askForOutline(text);
+    thinking.textContent = `Building ${outline.slides.length + 1} slides…`;
     await buildSlides(outline);
-    setStatus(`Done: added ${outline.slides.length + 1} slides.`);
+    thinking.remove();
+    const titles = outline.slides.map((s, i) => `${i + 1}. ${s.title}`).join("\n");
+    addMessage(`Added "${outline.title}" with ${outline.slides.length} slides:\n${titles}`, "assistant");
   } catch (error) {
-    setStatus(error.message, true);
+    thinking.remove();
+    addMessage(error.message, "assistant error");
   } finally {
     button.disabled = false;
+    input.focus();
   }
 }
 
-// ---------- AI ----------
+// ---------- backend ----------
 
-function systemPrompt(count) {
-  return `You write PowerPoint presentations. Reply with JSON only, in exactly this shape:
-{"title": "...", "subtitle": "...", "slides": [{"title": "...", "bullets": ["...", "..."]}]}
-Rules:
-- exactly ${count} items in "slides" (the title slide is separate)
-- 3 to 5 bullets per slide, each under 12 words, no full stop at the end
-- concrete and specific, no filler
-- write in the same language as the user's request`;
-}
-
-async function askForOutline(prompt, count, { baseUrl, model, apiKey }) {
-  // Azure OpenAI uses an "api-key" header; OpenAI-compatible APIs use a bearer token.
-  const auth = baseUrl.includes("azure.com") ? { "api-key": apiKey } : { Authorization: `Bearer ${apiKey}` };
-
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+async function askForOutline(prompt) {
+  const response = await fetch("/api/outline", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...auth },
-    body: JSON.stringify({
-      model,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt(count) },
-        { role: "user", content: prompt },
-      ],
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
   });
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 200);
-    throw new Error(`The AI request failed (${response.status}). ${detail}`);
-  }
-  const data = await response.json();
-  return parseOutline(data.choices?.[0]?.message?.content ?? "");
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `The server answered ${response.status}.`);
+  return parseOutline(data.content || "");
 }
 
 // ---------- PowerPoint ----------
