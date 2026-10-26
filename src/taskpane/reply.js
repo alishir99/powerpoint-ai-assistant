@@ -1,4 +1,25 @@
 // Turns the AI's reply into a clean "create" or "edit" action, or throws a readable error.
+
+const TYPES = ["points", "columns", "process"];
+
+function cleanSlide(s) {
+  const bullets = (Array.isArray(s?.bullets) ? s.bullets : []).map(String).slice(0, 6);
+  const items = (Array.isArray(s?.items) ? s.items : [])
+    .map((item) => ({ heading: String(item?.heading || ""), text: String(item?.text || "") }))
+    .filter((item) => item.heading || item.text)
+    .slice(0, 4);
+  let type = TYPES.includes(s?.type) ? s.type : "points";
+  // Columns and processes need at least two items; otherwise show the content as points.
+  if (type !== "points" && items.length < 2) type = "points";
+  return {
+    type,
+    title: String(s?.title || ""),
+    bullets: type === "points" && bullets.length === 0 ? items.map((i) => `${i.heading}: ${i.text}`) : bullets,
+    items,
+    takeaway: String(s?.takeaway || ""),
+  };
+}
+
 export function parseReply(text) {
   // Some models wrap JSON in ``` fences even when asked not to.
   const json = String(text).replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
@@ -19,10 +40,7 @@ export function parseReply(text) {
       reply: message,
       title: String(reply.title || "Presentation"),
       subtitle: String(reply.subtitle || ""),
-      slides: reply.slides.map((s) => ({
-        title: String(s?.title || ""),
-        bullets: (Array.isArray(s?.bullets) ? s.bullets : []).map(String).slice(0, 6),
-      })),
+      slides: reply.slides.slice(0, 10).map(cleanSlide),
     };
   }
 

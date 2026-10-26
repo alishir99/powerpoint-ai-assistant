@@ -1,11 +1,11 @@
 /* global document, Office, PowerPoint, fetch */
 
 import { parseReply } from "./reply.js";
+import { drawContentSlide, drawTitleSlide } from "./design.js";
 
-// Layout names in English and Swedish Office. If neither matches,
-// fall back to the position used by the default Office theme.
-const TITLE_LAYOUTS = ["Title Slide", "Rubrikbild"];
-const CONTENT_LAYOUTS = ["Title and Content", "Rubrik och innehåll"];
+// The blank layout in English and Swedish Office. If neither matches,
+// fall back to its position in the default Office theme.
+const BLANK_LAYOUTS = ["Blank", "Tom"];
 const TEXT_SHAPES = ["Placeholder", "TextBox", "GeometricShape", "Callout"];
 const MAX_TEXT = 1500; // characters per shape sent to the AI
 
@@ -226,42 +226,30 @@ async function isBlankDeck(context) {
   return texts.every((text) => text !== null && text.trim() === "");
 }
 
-function fill(slide, texts) {
-  // New slides come with the layout's placeholders: [0] title, [1] body or subtitle.
-  texts.forEach((text, i) => {
-    const shape = slide.shapes.items[i];
-    if (shape) shape.textFrame.textRange.text = text;
-  });
-}
-
-async function createSlides(outline) {
+async function createSlides(deck) {
   await PowerPoint.run(async (context) => {
     const removeFirst = await isBlankDeck(context);
 
     const layouts = context.presentation.slideMasters.getItemAt(0).layouts;
     layouts.load("items/id,items/name");
     await context.sync();
-    const titleLayout = findLayout(layouts.items, TITLE_LAYOUTS, 0);
-    const contentLayout = findLayout(layouts.items, CONTENT_LAYOUTS, 1);
+    const blank = findLayout(layouts.items, BLANK_LAYOUTS, 6);
 
-    // 1. Add the slides (they are appended at the end of the deck).
-    context.presentation.slides.add({ layoutId: titleLayout.id });
-    outline.slides.forEach(() => context.presentation.slides.add({ layoutId: contentLayout.id }));
+    // 1. Add blank slides (they are appended at the end of the deck).
+    for (let i = 0; i <= deck.slides.length; i++) context.presentation.slides.add({ layoutId: blank.id });
     await context.sync();
 
     const slides = context.presentation.slides;
     slides.load("items");
     await context.sync();
-    const added = slides.items.slice(-(outline.slides.length + 1));
-    added.forEach((slide) => slide.shapes.load("items"));
+    const added = slides.items.slice(-(deck.slides.length + 1));
+
+    // 2. Draw the design: cover, then one content slide per item.
+    drawTitleSlide(added[0], deck);
+    deck.slides.forEach((s, i) => drawContentSlide(added[i + 1], s, i + 2));
     await context.sync();
 
-    // 2. Fill in the text.
-    fill(added[0], [outline.title, outline.subtitle]);
-    outline.slides.forEach((s, i) => fill(added[i + 1], [s.title, s.bullets.join("\n")]));
-    await context.sync();
-
-    // 3. Tidy up: drop the empty starter slide and jump to the title slide.
+    // 3. Tidy up: drop the empty starter slide and jump to the cover.
     if (removeFirst) {
       slides.items[0].delete();
       await context.sync();

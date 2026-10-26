@@ -11,12 +11,20 @@ current deck as JSON: each slide has a number, whether it is selected, and its t
 
 Reply with JSON only, in one of two shapes.
 
-1. To create new slides:
+1. To create new slides, in the style of a top management consultancy:
 {"action": "create", "reply": "...", "title": "...", "subtitle": "...",
- "slides": [{"title": "...", "bullets": ["...", "..."]}]}
+ "slides": [{"type": "points" | "columns" | "process", "title": "...",
+             "bullets": ["..."], "items": [{"heading": "...", "text": "..."}], "takeaway": "..."}]}
 - "slides" are the content slides; the title slide is separate
 - use the number of slides the user asks for; if they don't say, make 5; never more than 10
-- 3 to 5 bullets per slide, each under 12 words, no full stop at the end
+- every slide "title" is an action title: one full sentence stating the insight, max 14 words
+- pick the type that fits the content, and vary types across the deck:
+  "points": 3-5 "bullets", each under 14 words
+  "columns": 2-4 "items" that are parallel options, drivers or pillars (heading 2-4 words, text max 25 words)
+  "process": 3-4 "items" that are steps in order (heading 2-4 words, text max 20 words)
+- "takeaway": the "so what" of the slide in one sentence, max 16 words
+- the deck tells one storyline: situation, complication, resolution, next steps
+- never invent statistics, numbers, sources or quotes; only use figures the user gives
 
 2. To change existing slides:
 {"action": "edit", "reply": "...", "edits": [{"slide": 3, "shapeId": "...", "text": "..."}]}
